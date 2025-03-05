@@ -5,6 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from flask_migrate import Migrate
 import datetime
 
 from models import User, db
@@ -12,13 +13,17 @@ from google_auth_oauthlib.flow import Flow
 from list_subscriptions import get_subscriptions, unsubscribe_from_message
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
-app.config['SECRET_KEY'] = 'some-secret'
-db.init_app(app)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# db.init_app(app)
+
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 # On first run or migration:
-with app.app_context():
-    db.create_all()
+# with app.app_context():
+#     db.create_all()
 
 CORS(app)  # enable cross-origin requests from Netlify domain
 
@@ -28,6 +33,14 @@ GOOGLE_SCOPES = [
     'openid',
     'https://www.googleapis.com/auth/gmail.modify'
 ]
+
+@app.route("/test-db")
+def test_db():
+    try:
+        result = db.engine.execute("SELECT 1;")
+        return "Database connected successfully!"
+    except Exception as e:
+        return f"Database error: {str(e)}"
 
 @app.route('/login')
 def login():

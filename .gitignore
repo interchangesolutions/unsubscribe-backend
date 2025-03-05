@@ -7,6 +7,7 @@ venv/
 env/
 venv.bak/
 *.egg-info/
+migrations/
 
 # If you use pipenv or poetry, ignore lock files if you want
 Pipfile.lock
@@ -34,3 +35,11 @@ Thumbs.db
 # virtual env
 # --------------------------
 email/
+
+# --------------------------
+# local SQlite database & instance folder
+# --------------------------
+instance/
+*.sqlite
+*.sqlite3
+user.db
