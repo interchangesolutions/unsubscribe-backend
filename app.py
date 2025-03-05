@@ -6,6 +6,7 @@ from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from flask_migrate import Migrate
+from sqlalchemy import text
 import datetime
 
 from models import User, db
@@ -39,8 +40,9 @@ GOOGLE_SCOPES = [
 @app.route("/test-db")
 def test_db():
     try:
-        result = db.session.execute("SELECT 1;")
-        return "Database connected successfully!"
+        result = db.session.execute(text("SELECT 1;"))
+        row = result.fetchone()  # Fetch result
+        return f"Database connected successfully! Query result: {row[0]}"
     except Exception as e:
         return f"Database error: {str(e)}"
 
