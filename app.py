@@ -1,4 +1,5 @@
 import os
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -14,6 +15,7 @@ from google_auth_oauthlib.flow import Flow
 from list_subscriptions import get_subscriptions, unsubscribe_from_message
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
