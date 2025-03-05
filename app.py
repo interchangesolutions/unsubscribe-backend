@@ -27,6 +27,8 @@ migrate = Migrate(app, db)
 
 CORS(app)  # enable cross-origin requests from Netlify domain
 
+PORT = int(os.environ.get("PORT", 5000))
+
 GOOGLE_SCOPES = [
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/gmail.readonly',
@@ -179,3 +181,6 @@ def unsubscribe():
         return jsonify({'status': 'success', 'unsubscribed_id': message_id})
     else:
         return jsonify({'status': 'failure', 'message_id': message_id}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=PORT)
