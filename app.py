@@ -39,7 +39,7 @@ GOOGLE_SCOPES = [
 @app.route("/test-db")
 def test_db():
     try:
-        result = db.engine.execute("SELECT 1;")
+        result = db.session.execute("SELECT 1;")
         return "Database connected successfully!"
     except Exception as e:
         return f"Database error: {str(e)}"
