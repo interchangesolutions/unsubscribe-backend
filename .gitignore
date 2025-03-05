@@ -1,0 +1,36 @@
+# --------------------------
+# Python
+# --------------------------
+__pycache__/
+*.py[cod]
+venv/
+env/
+venv.bak/
+*.egg-info/
+
+# If you use pipenv or poetry, ignore lock files if you want
+Pipfile.lock
+poetry.lock
+
+# --------------------------
+# Environment / Credentials
+# --------------------------
+.env
+.env.*
+.credentials/
+*.json
+token.pickle
+credentials.json
+
+# --------------------------
+# OS / Editor-specific
+# --------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --------------------------
+# virtual env
+# --------------------------
+email/

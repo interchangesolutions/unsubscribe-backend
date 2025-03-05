@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Subscriptions Dashboard</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0; 
+      padding: 0;
+      background-color: #f9f9f9;
+    }
+    .header {
+      background-color: #fff;
+      padding: 20px;
+      box-shadow: 0px 2px 4px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 40px auto;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 6px;
+      box-shadow: 0px 2px 4px rgba(0,0,0,0.1);
+    }
+    .title {
+      margin-bottom: 20px;
+      font-size: 24px;
+      text-align: center;
+    }
+    .subscription-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .subscription-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #fafafa;
+      padding: 10px;
+      border: 1px solid #eee;
+      border-radius: 4px;
+    }
+    .sub-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .from-label {
+      font-weight: bold;
+    }
+    .subject-label {
+      font-size: 14px;
+      color: #555;
+    }
+    .unsubscribe-btn {
+      font-size: 14px;
+      padding: 6px 12px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #007bff;
+      color: #fff;
+    }
+    .unsubscribe-btn:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Your Subscription Dashboard</h1>
+  </div>
+  <div class="container">
+    <div class="title">Manage Your Emails</div>
+    <div id="subs-list" class="subscription-list">
+      <!-- Subscription Cards Inserted via JS -->
+    </div>
+  </div>
+  
+  <script>
+    fetch('/subscriptions')
+      .then(response => response.json())
+      .then(data => {
+        const subsList = document.getElementById('subs-list');
+        data.forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'subscription-card';
+          
+          const infoDiv = document.createElement('div');
+          infoDiv.className = 'sub-info';
+          
+          const fromLabel = document.createElement('div');
+          fromLabel.className = 'from-label';
+          fromLabel.textContent = item.from;
+          
+          const subjectLabel = document.createElement('div');
+          subjectLabel.className = 'subject-label';
+          subjectLabel.textContent = item.subject;
+
+          infoDiv.appendChild(fromLabel);
+          infoDiv.appendChild(subjectLabel);
+          card.appendChild(infoDiv);
+
+          // Potential unsubscribe action
+          const unsubBtn = document.createElement('button');
+          unsubBtn.className = 'unsubscribe-btn';
+          unsubBtn.textContent = 'Unsubscribe';
+          unsubBtn.addEventListener('click', () => {
+            // We'll wire this up properly later
+            alert(`Will unsubscribe from: ${item.from}`);
+          });
+
+          card.appendChild(unsubBtn);
+          subsList.appendChild(card);
+        });
+      });
+  </script>
+</body>
+</html>
