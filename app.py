@@ -19,9 +19,11 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# db.init_app(app)
 
-db = SQLAlchemy(app)
+# db = SQLAlchemy(app)
+# migrate = Migrate(app, db)
+
+db.init_app(app)
 migrate = Migrate(app, db)
 
 # On first run or migration:
