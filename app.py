@@ -9,7 +9,7 @@ import datetime
 
 from models import User, db
 from google_auth_oauthlib.flow import Flow
-from .list_subscriptions import get_subscriptions, unsubscribe_from_message
+from list_subscriptions import get_subscriptions, unsubscribe_from_message
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
