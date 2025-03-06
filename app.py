@@ -19,6 +19,10 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config.update(
+    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_SECURE=True,
+)
 
 # db = SQLAlchemy(app)
 # migrate = Migrate(app, db)
@@ -30,7 +34,7 @@ migrate = Migrate(app, db)
 # with app.app_context():
 #     db.create_all()
 
-CORS(app)  # enable cross-origin requests from Netlify domain
+CORS(app, supports_credentials=True, origins=[os.getenv("FRONTEND_DASHBOARD_URL")])  # enable cross-origin requests from Netlify domain
 
 PORT = int(os.environ.get("PORT", 5000))
 
