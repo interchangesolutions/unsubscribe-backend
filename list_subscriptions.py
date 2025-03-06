@@ -1,12 +1,14 @@
 # list_subscriptions.py
 import requests
 from googleapiclient.discovery import build
+import datetime
+import email.utils  # for parsing email headers
+from googleapiclient.discovery import build
 
 def get_subscriptions(creds, max_results=50):
     """
-    Given a user's Credentials object (for the Gmail API), 
-    fetch subscription-like messages (those containing 'unsubscribe').
-    Return a list of subscription data.
+    Given a user's Credentials object, fetch subscription-like messages,
+    process the headers to extract necessary info, and return a list of subscription data.
     """
     service = build('gmail', 'v1', credentials=creds)
 
@@ -23,7 +25,6 @@ def get_subscriptions(creds, max_results=50):
     subscription_data = []
     for msg in messages_list['messages']:
         msg_id = msg['id']
-        # Get full email details
         msg_details = service.users().messages().get(
             userId='me',
             id=msg_id,
@@ -37,11 +38,36 @@ def get_subscriptions(creds, max_results=50):
         subject = header_dict.get('subject', '')
         list_unsubscribe = header_dict.get('list-unsubscribe', '')
 
+        # Parse "from" header to get name and email.
+        parsed = email.utils.parseaddr(from_field)  # returns (name, email)
+        name, email_address = parsed if parsed != ('', '') else ('Unknown', 'Unknown')
+
+        # Parse "date" header for lastOpened (days since message date)
+        date_str = header_dict.get('date')
+        lastOpened = 0
+        if date_str:
+            try:
+                msg_date = email.utils.parsedate_to_datetime(date_str)
+                now = datetime.datetime.now(datetime.timezone.utc)
+                lastOpened = (now - msg_date).days
+            except Exception:
+                lastOpened = 0
+
+        # Set a default frequency (you may enhance this later)
+        frequency = 0
+
+        # Set a default category (could be enhanced with heuristics)
+        category = "Other"
+
         subscription_data.append({
-            'message_id': msg_id,
-            'from': from_field,
+            'id': msg_id,               # Renamed key: 'id'
+            'name': name,
+            'email': email_address,
             'subject': subject,
-            'unsubscribe': list_unsubscribe
+            'unsubscribe': list_unsubscribe,
+            'frequency': frequency,
+            'lastOpened': lastOpened,
+            'category': category,
         })
 
     return subscription_data
