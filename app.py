@@ -121,8 +121,11 @@ def oauth_callback():
     # Log the user in by storing user_id in session
     session['user_id'] = existing_user.id
 
-    # Redirect to some dashboard or home page
-    return redirect(url_for('subscriptions'))
+    # Redirect to frontend dashboard
+    # In your backend app.py, at the end of the oauth_callback function:
+    FRONTEND_DASHBOARD_URL = os.getenv("FRONTEND_DASHBOARD_URL")
+    return redirect(FRONTEND_DASHBOARD_URL)
+
 
 @app.route('/subscriptions', methods=['GET'])
 def subscriptions():
