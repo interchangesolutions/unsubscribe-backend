@@ -34,7 +34,7 @@ migrate = Migrate(app, db)
 # with app.app_context():
 #     db.create_all()
 
-CORS(app, supports_credentials=True, origins=[os.getenv("FRONTEND_DASHBOARD_URL")])  # enable cross-origin requests from Netlify domain
+CORS(app, supports_credentials=True, origins=[os.getenv("FRONTEND_URL")])  # enable cross-origin requests from Netlify domain
 
 PORT = int(os.environ.get("PORT", 5000))
 
