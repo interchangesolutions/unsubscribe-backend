@@ -7,7 +7,7 @@ venv/
 env/
 venv.bak/
 *.egg-info/
-migrations/
+templates/
 
 # If you use pipenv or poetry, ignore lock files if you want
 Pipfile.lock
