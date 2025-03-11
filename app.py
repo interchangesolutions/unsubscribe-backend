@@ -149,6 +149,27 @@ def oauth_callback():
     # Redirect to the front-end dashboard with the JWT as a query parameter
     return redirect(f"{FRONTEND_DASHBOARD_URL}?token={access_token}")
 
+# -------------------------------
+# Auxillary Endpoints
+# -------------------------------
+
+def mark_message_as_read(creds, msg_id):
+    """
+    Uses the Gmail API to remove the 'UNREAD' label from a message,
+    effectively marking it as read.
+    """
+    service = build('gmail', 'v1', credentials=creds)
+    try:
+        service.users().messages().modify(
+            userId='me',
+            id=msg_id,
+            body={'removeLabelIds': ['UNREAD']}
+        ).execute()
+        print(f"Message {msg_id} marked as read.")
+        return True
+    except Exception as e:
+        print(f"Error marking message {msg_id} as read: {e}")
+        return False
 
 # -------------------------------
 # Protected Endpoints
@@ -215,6 +236,7 @@ def unsubscribe():
 
     result = unsubscribe_from_message(creds, message_id)
     if result is True:
+        mark_message_as_read(creds, message_id)
         return jsonify({'status': 'success', 'unsubscribed_id': message_id})
     elif isinstance(result, dict) and result.get("status") == "manual":
         return jsonify({
