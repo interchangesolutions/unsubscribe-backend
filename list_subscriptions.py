@@ -4,6 +4,7 @@ from googleapiclient.discovery import build
 import datetime
 import email.utils  # for parsing email headers
 from googleapiclient.discovery import build
+from bs4 import BeautifulSoup
 
 def get_subscriptions(creds, max_results=50):
     """
@@ -74,9 +75,11 @@ def get_subscriptions(creds, max_results=50):
 
 def unsubscribe_from_message(creds, msg_id):
     """
-    Given a user's Credentials and a specific message_id,
-    parse the List-Unsubscribe header and attempt to unsubscribe.
-    Returns True if we successfully unsubscribed, False otherwise.
+    Attempt to unsubscribe from a message.
+    Returns:
+      - True if unsubscribed successfully,
+      - "manual" or a dict { "status": "manual", "confirmation_url": <url> } if further manual intervention is needed,
+      - False if it fails.
     """
     service = build('gmail', 'v1', credentials=creds)
     msg_details = service.users().messages().get(
@@ -91,13 +94,39 @@ def unsubscribe_from_message(creds, msg_id):
 
     if unsub_link.startswith('http'):
         try:
-            r = requests.get(unsub_link)
-            print(f"Unsubscribe request for {msg_id} returned status {r.status_code}")  # Log the status
-            return r.ok
+            # First, attempt a simple GET request.
+            r = requests.get(unsub_link, timeout=10)
+            if r.ok:
+                print(f"Unsubscribe request for {msg_id} succeeded with status {r.status_code}")
+                return True
+            else:
+                print(f"Unsubscribe link for {msg_id} returned status {r.status_code}. Attempting further automation.")
+                page_content = r.text
+                soup = BeautifulSoup(page_content, "html.parser")
+                # Look for a button or link containing "unsubscribe"
+                button = soup.find(lambda tag: tag.name in ["button", "a"] and "unsubscribe" in tag.get_text().lower())
+                if button:
+                    form = soup.find("form")
+                    if form:
+                        print(f"Form found for message {msg_id}; requires additional automation.")
+                        return "manual"
+                    else:
+                        confirm_url = button.get('href')
+                        if confirm_url:
+                            confirm_response = requests.get(confirm_url, timeout=10)
+                            if confirm_response.ok:
+                                print(f"Automated confirmation succeeded for message {msg_id}")
+                                return True
+                            else:
+                                # Return manual with confirmation URL if available.
+                                print(f"Automated confirmation failed for message {msg_id}; manual action required.")
+                                return {"status": "manual", "confirmation_url": confirm_url}
+                return "manual"
         except Exception as e:
             print(f"Error unsubscribing from {msg_id}: {e}")
             return False
     elif unsub_link.startswith('mailto:'):
-        return False
+        # For mailto, return manual so the user can unsubscribe via email.
+        return "manual"
 
     return False

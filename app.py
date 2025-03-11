@@ -213,9 +213,20 @@ def unsubscribe():
     if not message_id:
         return jsonify({'status': 'error', 'message': 'No message_id provided'}), 400
 
-    success = unsubscribe_from_message(creds, message_id)
-    if success:
+    result = unsubscribe_from_message(creds, message_id)
+    if result is True:
         return jsonify({'status': 'success', 'unsubscribed_id': message_id})
+    elif isinstance(result, dict) and result.get("status") == "manual":
+        return jsonify({
+            'status': 'manual',
+            'message': f'Manual confirmation required for message {message_id}',
+            'confirmation_url': result.get("confirmation_url")
+        }), 200
+    elif result == "manual":
+        return jsonify({
+            'status': 'manual',
+            'message': f'Manual confirmation required for message {message_id}'
+        }), 200
     else:
         return jsonify({'status': 'failure', 'message': f'Failed to unsubscribe message {message_id}'}), 500
 
