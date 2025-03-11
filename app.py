@@ -1,8 +1,14 @@
 import os
-from werkzeug.middleware.proxy_fix import ProxyFix
-from flask import Flask, request, jsonify, session, redirect, url_for
+from flask import Flask, request, jsonify, redirect, url_for, session
+from flask_jwt_extended import (
+    JWTManager,
+    create_access_token,
+    jwt_required,
+    get_jwt_identity
+)
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.middleware.proxy_fix import ProxyFix
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -14,27 +20,33 @@ from models import User, db
 from google_auth_oauthlib.flow import Flow
 from list_subscriptions import get_subscriptions, unsubscribe_from_message
 
+# Initialize the app
 app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+# Set the JWT secret key and other configurations from environment variables
+app.config['JWT_SECRET_KEY'] = os.getenv("JWT_SECRET_KEY")
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
-app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")   # For Flask session signing
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Cookie settings in production with HTTPS use:
 app.config.update(
     SESSION_COOKIE_SAMESITE="None",
     SESSION_COOKIE_SECURE=True,
 )
 
-# db = SQLAlchemy(app)
-# migrate = Migrate(app, db)
+# Set up proxy fix so Flask correctly detects HTTPS behind reverse proxies
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
+# Initialize JWT and database
+jwt = JWTManager(app)
 db.init_app(app)
 migrate = Migrate(app, db)
 
-# On first run or migration:
+# For local testing
 # with app.app_context():
 #     db.create_all()
 
-CORS(app, supports_credentials=True, origins=[os.getenv("FRONTEND_URL")])  # enable cross-origin requests from Netlify domain
+# Set up CORS – ensure the FRONTEND_URL environment variable is set to your production front-end origin
+CORS(app, supports_credentials=True, origins=[os.getenv("FRONTEND_URL")])
 
 PORT = int(os.environ.get("PORT", 5000))
 
@@ -45,51 +57,61 @@ GOOGLE_SCOPES = [
     'https://www.googleapis.com/auth/gmail.modify'
 ]
 
-@app.route("/test-db")
-def test_db():
-    try:
-        result = db.session.execute(text("SELECT 1;"))
-        row = result.fetchone()  # Fetch result
-        return f"Database connected successfully! Query result: {row[0]}"
-    except Exception as e:
-        return f"Database error: {str(e)}"
+# @app.route("/test-db")
+# def test_db():
+#     try:
+#         result = db.session.execute(text("SELECT 1;"))
+#         row = result.fetchone()  # Fetch result
+#         return f"Database connected successfully! Query result: {row[0]}"
+#     except Exception as e:
+#         return f"Database error: {str(e)}"
 
+# -------------------------------
+# OAuth Login Endpoint
+# -------------------------------
 @app.route('/login')
 def login():
     flow = Flow.from_client_config(
         {
             "web": {
-                "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
-                "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
-                "redirect_uris": [os.environ.get("GOOGLE_REDIRECT_URI")],
+                "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI")],
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token"
             }
         },
         scopes=GOOGLE_SCOPES
     )
-    flow.redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI")
+    flow.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
 
     authorization_url, state = flow.authorization_url(
         access_type='offline',
         include_granted_scopes='true',
         prompt='consent'
     )
+
+    # Store the state in the session for validation on callback.
     session['state'] = state
+
     return redirect(authorization_url)
 
+
+# -------------------------------
+# OAuth Callback Endpoint
+# -------------------------------
 @app.route('/oauth/callback')
 def oauth_callback():
-    state = session.get('state', None)
+    state = session.get('state')
     if not state:
         return "State missing in session.", 400
 
     flow = Flow.from_client_config(
         {
             "web": {
-                "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
-                "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
-                "redirect_uris": [os.environ.get("GOOGLE_REDIRECT_URI")],
+                "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI")],
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token"
             }
@@ -97,59 +119,63 @@ def oauth_callback():
         scopes=GOOGLE_SCOPES,
         state=state
     )
-    flow.redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI")
+    flow.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
 
     # Exchange the auth code for tokens
-    authorization_response = request.url
-    flow.fetch_token(authorization_response=authorization_response)
-
+    flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
-    # Now you have access_token, refresh_token, expiry, etc.
-    # Next, get the user’s Google profile (email, etc.)
-    from googleapiclient.discovery import build
+
+    # Retrieve user info from Google
     oauth_service = build('oauth2', 'v2', credentials=creds)
     user_info = oauth_service.userinfo().get().execute()
     email = user_info['email']
 
-    # Check if user exists in DB
+    # Find or create user in the database
     existing_user = User.query.filter_by(email=email).first()
     if not existing_user:
         existing_user = User(email=email)
         db.session.add(existing_user)
-    
     existing_user.access_token = creds.token
     existing_user.refresh_token = creds.refresh_token
     existing_user.token_expiry = creds.expiry
     db.session.commit()
 
-    # Log the user in by storing user_id in session
-    session['user_id'] = existing_user.id
-
-    # Redirect to frontend dashboard
-    # In your backend app.py, at the end of the oauth_callback function:
+    # Generate a JWT for the authenticated user. Convert user id to string.
+    access_token = create_access_token(identity=str(existing_user.id))
     FRONTEND_DASHBOARD_URL = os.getenv("FRONTEND_DASHBOARD_URL")
-    return redirect(FRONTEND_DASHBOARD_URL)
+    
+    # Clear the state from session as it's no longer needed
+    session.pop('state', None)
+    # Redirect to the front-end dashboard with the JWT as a query parameter
+    return redirect(f"{FRONTEND_DASHBOARD_URL}?token={access_token}")
 
+
+# -------------------------------
+# Protected Endpoints
+# -------------------------------
+
+# Local testing debug logging
+# @jwt.invalid_token_loader
+# def invalid_token_callback(error_string):
+#     return jsonify({"msg": "Invalid token: " + error_string}), 422
 
 @app.route('/subscriptions', methods=['GET'])
+@jwt_required()
 def subscriptions():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-
-    user = User.query.get(session['user_id'])
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 401
 
-    # Build Credentials object from DB-stored tokens
+    # Build Credentials from stored tokens
     creds = Credentials(
         token=user.access_token,
         refresh_token=user.refresh_token,
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=os.environ.get("GOOGLE_CLIENT_ID"),
-        client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+        client_id=os.getenv("GOOGLE_CLIENT_ID"),
+        client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         scopes=GOOGLE_SCOPES
     )
-
     # Refresh if expired
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
@@ -157,16 +183,14 @@ def subscriptions():
         user.token_expiry = creds.expiry
         db.session.commit()
 
-    # Now pass creds to our multi-user function
     results = get_subscriptions(creds, max_results=50)
     return jsonify(results)
 
 @app.route('/unsubscribe', methods=['POST'])
+@jwt_required()
 def unsubscribe():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-
-    user = User.query.get(session['user_id'])
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 401
 
@@ -174,8 +198,8 @@ def unsubscribe():
         token=user.access_token,
         refresh_token=user.refresh_token,
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=os.environ.get("GOOGLE_CLIENT_ID"),
-        client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+        client_id=os.getenv("GOOGLE_CLIENT_ID"),
+        client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         scopes=GOOGLE_SCOPES
     )
     if creds.expired and creds.refresh_token:
@@ -193,7 +217,7 @@ def unsubscribe():
     if success:
         return jsonify({'status': 'success', 'unsubscribed_id': message_id})
     else:
-        return jsonify({'status': 'failure', 'message_id': message_id}), 500
+        return jsonify({'status': 'failure', 'message': f'Failed to unsubscribe message {message_id}'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT)

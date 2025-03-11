@@ -79,8 +79,6 @@ def unsubscribe_from_message(creds, msg_id):
     Returns True if we successfully unsubscribed, False otherwise.
     """
     service = build('gmail', 'v1', credentials=creds)
-
-    # Get message details
     msg_details = service.users().messages().get(
         userId='me',
         id=msg_id,
@@ -89,22 +87,17 @@ def unsubscribe_from_message(creds, msg_id):
 
     headers = msg_details['payload'].get('headers', [])
     header_dict = {h['name'].lower(): h['value'] for h in headers}
+    unsub_link = header_dict.get('list-unsubscribe', '').strip('<>')
 
-    unsub_link = header_dict.get('list-unsubscribe', '')
-    # unsub_link might look like <http://example.com/unsub?token=abc> or <mailto:unsubscribe@example.com>
-    unsub_link = unsub_link.strip('<>')
-
-    # If it's an HTTP link, try GET (or POST) to unsubscribe
     if unsub_link.startswith('http'):
         try:
             r = requests.get(unsub_link)
-            # Some unsubscribe links require POST or a special URL
-            # Adjust as needed; this is just a naive GET.
+            print(f"Unsubscribe request for {msg_id} returned status {r.status_code}")  # Log the status
             return r.ok
-        except:
+        except Exception as e:
+            print(f"Error unsubscribing from {msg_id}: {e}")
             return False
     elif unsub_link.startswith('mailto:'):
-        # Optionally implement logic to send an unsubscribe email
         return False
 
     return False
